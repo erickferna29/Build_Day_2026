@@ -278,3 +278,21 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.hero-card {
+  padding: 4rem;
+  text-align: center;
+}
+
+.hero-content h2 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.hero-text {
+  max-width: 700px;
+  margin: auto;
+  margin-bottom: 2rem;
+  opacity: 0.8;
+  line-height: 1.6;
+}

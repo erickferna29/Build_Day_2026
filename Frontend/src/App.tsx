@@ -41,7 +41,7 @@ const initialState: FormData = {
 
 function App() {
   const [form, setForm] = useState<FormData>(initialState);
-  const [status, setStatus] = useState<'entry' | 'loading' | 'result' | 'accepted'>('entry');
+  const [status, setStatus] = useState<'home' | 'entry' | 'loading' | 'result' | 'accepted'>('home');
   const [responseData, setResponseData] = useState<BackendResponse | null>(null);
   const [error, setError] = useState<string>('');
 
@@ -49,11 +49,13 @@ function App() {
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
+
     setForm((current) => ({
       ...current,
-      [name]: name === 'monto' || name === 'plazo' || name === 'tiie' || name === 'puntos'
-        ? Number(value)
-        : value
+      [name]:
+        name === 'monto' || name === 'plazo' || name === 'tiie' || name === 'puntos'
+          ? Number(value)
+          : value
     }));
   };
 
@@ -109,11 +111,34 @@ function App() {
         <div>
           <p className="eyebrow">AgroCapital / FIRA</p>
           <h1>Evaluación de crédito inteligente</h1>
-          <p className="subtitle">Valida solicitudes rurales y de la cadena alimentaria con un flujo claro y profesional.</p>
+          <p className="subtitle">
+            Valida solicitudes rurales y de la cadena alimentaria con un flujo claro y profesional.
+          </p>
         </div>
       </header>
 
       <main>
+        {status === 'home' && (
+          <section className="card hero-card">
+            <div className="hero-content">
+              <p className="eyebrow">Financiamiento inteligente</p>
+
+              <h2>Impulsa tu proyecto agroindustrial con IA</h2>
+
+              <p className="hero-text">
+                Solicita un préstamo, evalúa tu viabilidad financiera y recibe una cotización
+                estimada basada en reglas de negocio y análisis automatizado.
+              </p>
+
+              <div className="hero-actions">
+                <button className="primary-button" type="button" onClick={() => setStatus('entry')}>
+                  Solicitar préstamo
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {status === 'entry' && (
           <form className="card form-card" onSubmit={handleSubmit}>
             <div className="section-title">
@@ -126,6 +151,7 @@ function App() {
                 <span>Nombre o razón social</span>
                 <input name="nombre" value={form.nombre} onChange={handleChange} required />
               </label>
+
               <label>
                 <span>Ubicación</span>
                 <input name="ubicacion" value={form.ubicacion} onChange={handleChange} required />
@@ -140,35 +166,76 @@ function App() {
             <div className="grid-2">
               <label>
                 <span>Monto solicitado</span>
-                <input name="monto" type="number" value={form.monto} onChange={handleChange} min={0} required />
+                <input
+                  name="monto"
+                  type="number"
+                  value={form.monto}
+                  onChange={handleChange}
+                  min={0}
+                  required
+                />
               </label>
+
               <label>
-                <span>Plazo (meses)</span>
-                <input name="plazo" type="number" value={form.plazo} onChange={handleChange} min={1} required />
+                <span>Plazo en meses</span>
+                <input
+                  name="plazo"
+                  type="number"
+                  value={form.plazo}
+                  onChange={handleChange}
+                  min={1}
+                  required
+                />
               </label>
             </div>
 
             <label>
               <span>Concepto de inversión</span>
-              <textarea name="concepto" value={form.concepto} onChange={handleChange} rows={4} required />
+              <textarea
+                name="concepto"
+                value={form.concepto}
+                onChange={handleChange}
+                rows={4}
+                required
+              />
             </label>
 
             <div className="grid-3">
               <label>
                 <span>TIIE actual (%)</span>
-                <input name="tiie" type="number" value={form.tiie} onChange={handleChange} step="0.01" min="0" required />
+                <input
+                  name="tiie"
+                  type="number"
+                  value={form.tiie}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  required
+                />
               </label>
+
               <label>
                 <span>Puntos adicionales (%)</span>
-                <input name="puntos" type="number" value={form.puntos} onChange={handleChange} step="0.01" min="0" required />
+                <input
+                  name="puntos"
+                  type="number"
+                  value={form.puntos}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  required
+                />
               </label>
+
               <div className="summary-panel">
                 <span>Tasa estimada final</span>
                 <strong>{tasaFinal.toFixed(2)}%</strong>
               </div>
             </div>
 
-            <button className="primary-button" type="submit">Analizar viabilidad</button>
+            <button className="primary-button" type="submit">
+              Analizar viabilidad
+            </button>
           </form>
         )}
 
@@ -177,18 +244,19 @@ function App() {
             <div className="loader" aria-hidden="true"></div>
             <div>
               <h2>Analizando viabilidad con Agente de IA...</h2>
-              <p>Estamos revisando el giro, el concepto y las reglas FIRA. Esto tomará unos segundos.</p>
+              <p>Estamos revisando el giro, el concepto y las reglas FIRA.</p>
             </div>
           </section>
         )}
 
-        {status !== 'entry' && status !== 'loading' && (
+        {status !== 'home' && status !== 'entry' && status !== 'loading' && (
           <section className="card result-card">
             <div className="result-header">
               <div>
                 <span className="status-chip">Dictamen FIRA</span>
                 <h2>{responseData ? 'Solicitud evaluada' : 'Resultado parcial'}</h2>
               </div>
+
               <div className="rate-pill">{tasaFinal.toFixed(2)}%</div>
             </div>
 
@@ -204,12 +272,18 @@ function App() {
                 <div className="metrics-grid">
                   <div>
                     <span>Interés aplicado</span>
-                    <strong>{responseData?.cotizacion_estimada.tasa_anual_aplicada_porcentaje.toFixed(2)}%</strong>
+                    <strong>
+                      {responseData?.cotizacion_estimada.tasa_anual_aplicada_porcentaje.toFixed(2)}%
+                    </strong>
                   </div>
+
                   <div>
                     <span>Monto sugerido</span>
-                    <strong>${responseData?.cotizacion_estimada.monto_autorizado_sugerido.toLocaleString()}</strong>
+                    <strong>
+                      ${responseData?.cotizacion_estimada.monto_autorizado_sugerido.toLocaleString()}
+                    </strong>
                   </div>
+
                   <div>
                     <span>Plazo</span>
                     <strong>{form.plazo} meses</strong>
@@ -222,7 +296,7 @@ function App() {
 
             {status === 'result' && !error && (
               <button className="primary-button" type="button" onClick={acceptFinancing}>
-                Aceptar Financiamiento
+                Aceptar financiamiento
               </button>
             )}
           </section>
@@ -237,16 +311,20 @@ function App() {
               <span>RFC</span>
               <input type="text" placeholder="AAA010101AAA" />
             </label>
+
             <label>
               <span>Buró de Crédito</span>
               <input type="file" accept="application/pdf,image/*" />
             </label>
+
             <label>
               <span>Identificación oficial</span>
               <input type="file" accept="application/pdf,image/*" />
             </label>
 
-            <button className="secondary-button" type="button">Enviar documentos</button>
+            <button className="secondary-button" type="button">
+              Enviar documentos
+            </button>
           </section>
         )}
       </main>
