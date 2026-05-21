@@ -1,0 +1,3 @@
+- [x] Proyecto React + Vite inicializado.
+- [x] Estructura de archivos creada.
+- [ ] Verificar instalación y compilación.
