@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import AsistenteFAQ from "./AsistenteFAQ";
 
 type Item = {
   id: string;
@@ -262,6 +263,8 @@ export default function App() {
           </section>
         )}
       </main>
+
+      <AsistenteFAQ />
     </div>
   );
 }
