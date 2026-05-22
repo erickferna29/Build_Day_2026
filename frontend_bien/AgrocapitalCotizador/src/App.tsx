@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import SocioMayoritario from "./socios/DashboardSocio";
+import AsistenteFAQ from "./AsistenteFAQ";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1993,6 +1994,8 @@ function Landing() {
       <Asterra />
       <CTA onWizard={() => setWizardOpen(true)} />
       <Footer />
+
+      {!wizardOpen && <AsistenteFAQ />}
 
       {wizardOpen && <Wizard onClose={() => setWizardOpen(false)} />}
     </div>
