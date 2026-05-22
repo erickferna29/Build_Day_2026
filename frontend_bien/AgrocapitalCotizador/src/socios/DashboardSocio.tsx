@@ -2,7 +2,7 @@
  * SocioMayoritario.tsx
  *
  * Requiere Material Symbols en tu index.html (o _document.tsx):
- *   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+ * <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
  */
 
 import { useState } from "react";
@@ -36,11 +36,8 @@ interface Condicion {
   descripcion: string;
   valor: string;
   icon: string;
-}
-
-interface EmpresaCondiciones {
-  empresa: string;
-  condiciones: Condicion[];
+  instruccionIA: string; 
+  esEstricta: boolean; 
 }
 
 type DecisionStatus = "pendiente" | "aprobado" | "rechazado";
@@ -156,51 +153,33 @@ const REQUESTS: SolicitudRequest[] = [
   },
 ];
 
-const CONDICIONES_INICIALES: EmpresaCondiciones[] = [
+const CONDICIONES_GENERALES: Condicion[] = [
   {
-    empresa: "Agroinsumos del Noroeste SA de CV",
-    condiciones: [
-      {
-        id: 1,
-        nombre: "Tasa de interés preferencial",
-        descripcion: "Aplica a todos los créditos de avío y refaccionarios",
-        valor: "11.5% anual",
-        icon: "percent",
-      },
-      {
-        id: 2,
-        nombre: "Monto máximo autorizado",
-        descripcion: "Límite exclusivo de crédito para esta empresa",
-        valor: "$5,000,000 MXN",
-        icon: "payments",
-      },
-      {
-        id: 3,
-        nombre: "Plazo máximo",
-        descripcion: "Extensión especial aprobada por Socio Mayoritario",
-        valor: "36 meses",
-        icon: "calendar_month",
-      },
-    ],
+    id: 1,
+    nombre: "Tasa de interés base",
+    descripcion: "Tasa estándar aplicada a todas las solicitudes por defecto.",
+    valor: "14.5% anual",
+    icon: "percent",
+    instruccionIA: "Si el cliente pregunta por la tasa, ofrece 14.5%. No ofrezcas tasas menores sin autorización del socio. Úsala como base para calcular la viabilidad.",
+    esEstricta: true,
   },
   {
-    empresa: "Ganadería Coppel Hermanos SC",
-    condiciones: [
-      {
-        id: 4,
-        nombre: "Tasa de interés preferencial",
-        descripcion: "Aplica a créditos refaccionarios únicamente",
-        valor: "12.0% anual",
-        icon: "percent",
-      },
-      {
-        id: 5,
-        nombre: "Garantía mínima requerida",
-        descripcion: "Condición especial negociada con el socio",
-        valor: "60% del crédito",
-        icon: "verified_user",
-      },
-    ],
+    id: 2,
+    nombre: "Plazo máximo general",
+    descripcion: "Límite de tiempo estricto para cualquier financiamiento.",
+    valor: "48 meses",
+    icon: "calendar_month",
+    instruccionIA: "Rechaza automáticamente cualquier solicitud que exija un plazo mayor a 48 meses. Notifica que el límite de la política actual es de 4 años.",
+    esEstricta: true,
+  },
+  {
+    id: 3,
+    nombre: "Garantía mínima requerida",
+    descripcion: "Proporción del valor de la garantía respecto al crédito.",
+    valor: "1.5 a 1",
+    icon: "verified_user",
+    instruccionIA: "Verifica el valor comercial de la garantía. Si es menor a 1.5 veces el monto solicitado, clasifica la solicitud como 'Riesgo Moderado/Alto' y solicita un aval solidario.",
+    esEstricta: false,
   },
 ];
 
@@ -260,94 +239,72 @@ const Toast = ({ message, show }: { message: string; show: boolean }) => (
 interface ModalProps {
   open: boolean;
   mode: "nueva" | "editar";
-  initialNombre?: string;
-  initialValor?: string;
+  condicion?: Condicion;
   onClose: () => void;
-  onSave: (nombre: string, valor: string, nota: string) => void;
+  onSave: (cond: Omit<Condicion, "id" | "icon">) => void;
 }
 
-const CondicionModal = ({
-  open, mode, initialNombre = "", initialValor = "", onClose, onSave,
-}: ModalProps) => {
-  const [nombre, setNombre] = useState(initialNombre);
-  const [valor, setValor]   = useState(initialValor);
-  const [nota, setNota]     = useState("");
+const CondicionModal = ({ open, mode, condicion, onClose, onSave }: ModalProps) => {
+  const [nombre, setNombre] = useState(condicion?.nombre || "");
+  const [valor, setValor] = useState(condicion?.valor || "");
+  const [descripcion, setDescripcion] = useState(condicion?.descripcion || "");
+  const [instruccionIA, setInstruccionIA] = useState(condicion?.instruccionIA || "");
+  const [esEstricta, setEsEstricta] = useState(condicion?.esEstricta ?? true);
 
   if (!open) return null;
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "9px 12px",
-    border: `1px solid ${AC.borderMid}`, borderRadius: 8,
-    fontSize: 13.5, fontFamily: "inherit", color: "inherit",
-    background: "#fff", outline: "none", boxSizing: "border-box",
+    width: "100%", padding: "9px 12px", border: `1px solid ${AC.borderMid}`,
+    borderRadius: 8, fontSize: 13.5, fontFamily: "inherit", color: "inherit",
+    background: "#fff", outline: "none", boxSizing: "border-box", marginBottom: 12
+  };
+
+  const handleSave = () => {
+    onSave({ nombre, valor, descripcion, instruccionIA, esEstricta });
   };
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,40,20,0.45)",
-        zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{ background: "#fff", borderRadius: 14, width: 480, maxWidth: "95vw", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
-
-        {/* Header */}
-        <div style={{ padding: "18px 22px", borderBottom: `0.5px solid ${AC.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,40,20,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "#fff", borderRadius: 14, width: 520, maxWidth: "95vw", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
+        
+        <div style={{ padding: "18px 22px", borderBottom: `0.5px solid ${AC.border}`, display: "flex", justifyContent: "space-between" }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500, color: AC.dark }}>
-            {mode === "nueva" ? "Nueva condición exclusiva" : "Editar condición"}
+            {mode === "nueva" ? "Nueva Política General" : "Editar Política"}
           </span>
-          <button
-            onClick={onClose}
-            style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", color: "#666" }}
-          >
-            <Icon name="close" size={20} />
-          </button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#666" }}><Icon name="close" size={20} /></button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: 22 }}>
-          <div style={{ background: "#fffbec", border: "1px solid #f0d060", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#7a5500", display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 16 }}>
-            <Icon name="warning" size={16} color="#7a5500" style={{ marginTop: 1 }} />
-            <span>Este cambio será visible al agente asignado de la empresa. Quedará registrado en el historial de auditoría con tu nombre y fecha.</span>
-          </div>
+        <div style={{ padding: 22, maxHeight: "65vh", overflowY: "auto" }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>Nombre de la regla</label>
+          <input style={inputStyle} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Plazo máximo" />
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>
-              Nombre de la condición
-            </label>
-            <input style={inputStyle} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Tasa preferencial, Plazo máximo..." />
-          </div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>Valor paramétrico</label>
+          <input style={inputStyle} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Ej: 48 meses" />
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>
-              Valor
-            </label>
-            <input style={inputStyle} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Ej: 11.5% anual, $5,000,000 MXN..." />
-          </div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>Descripción humana</label>
+          <input style={inputStyle} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Para visualización en dashboard..." />
 
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: AC.dark, marginBottom: 6 }}>
-              Nota para el agente (opcional)
+          <div style={{ background: "#f0f7f3", border: `1px solid ${AC.borderMid}`, borderRadius: 8, padding: 14, marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <Icon name="smart_toy" size={18} color={AC.mid} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: AC.dark }}>Configuración para Agente IA</span>
+            </div>
+            
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: AC.dark, marginBottom: 6 }}>Instrucción de comportamiento (Prompting)</label>
+            <textarea style={{ ...inputStyle, resize: "vertical" }} rows={3} value={instruccionIA} onChange={(e) => setInstruccionIA(e.target.value)} placeholder="Ej: Si la solicitud excede este valor, recházala y envía el mensaje de política excedida..." />
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+              <input type="checkbox" checked={esEstricta} onChange={(e) => setEsEstricta(e.target.checked)} />
+              <b>Regla Estricta</b> (El agente no puede omitirla bajo ninguna circunstancia)
             </label>
-            <textarea style={{ ...inputStyle, resize: "vertical" }} rows={3} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Motivo del cambio o instrucciones adicionales..." />
           </div>
         </div>
 
-        {/* Footer */}
         <div style={{ padding: "14px 22px", borderTop: `0.5px solid ${AC.border}`, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            style={{ padding: "8px 18px", background: "transparent", border: `0.5px solid ${AC.borderMid}`, borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#666", fontFamily: "inherit" }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => { onSave(nombre, valor, nota); setNota(""); }}
-            style={{ padding: "8px 20px", background: AC.dark, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
-          >
+          <button onClick={onClose} style={{ padding: "8px 18px", background: "transparent", border: `0.5px solid ${AC.borderMid}`, borderRadius: 8, cursor: "pointer", color: "#666" }}>Cancelar</button>
+          <button onClick={handleSave} style={{ padding: "8px 20px", background: AC.dark, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", display: "flex", gap: 6 }}>
             <Icon name="check" size={16} color="#fff" />
-            Guardar y notificar agente
+            Guardar regla general
           </button>
         </div>
       </div>
@@ -607,98 +564,94 @@ const BuzonView = () => {
 // ─── Vista Condiciones ────────────────────────────────────────────────────────
 
 const CondicionesView = () => {
-  const [condiciones, setCondiciones] = useState<EmpresaCondiciones[]>(CONDICIONES_INICIALES);
-  const [modal, setModal] = useState<{
-    open: boolean; mode: "nueva" | "editar";
-    empresaIdx: number; condId?: number;
-    nombre?: string; valor?: string;
-  }>({ open: false, mode: "nueva", empresaIdx: 0 });
-  const [toastMsg, setToastMsg]   = useState("");
+  const [condiciones, setCondiciones] = useState<Condicion[]>(CONDICIONES_GENERALES);
+  const [modal, setModal] = useState<{ open: boolean; mode: "nueva" | "editar"; condicion?: Condicion }>({ open: false, mode: "nueva" });
+  const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
 
-  const showToastFn = (msg: string) => {
-    setToastMsg(msg); setShowToast(true);
-    setTimeout(() => setShowToast(false), 3500);
-  };
+  const showToastFn = (msg: string) => { setToastMsg(msg); setShowToast(true); setTimeout(() => setShowToast(false), 3500); };
 
-  const handleSave = (nombre: string, valor: string) => {
-    setCondiciones((prev) =>
-      prev.map((e, i) => {
-        if (i !== modal.empresaIdx) return e;
-        if (modal.mode === "nueva") {
-          return { ...e, condiciones: [...e.condiciones, { id: Date.now(), nombre, descripcion: "Condición definida por Socio Mayoritario", valor, icon: "star" }] };
-        }
-        return { ...e, condiciones: e.condiciones.map((c) => (c.id === modal.condId ? { ...c, nombre, valor } : c)) };
-      })
-    );
-    setModal({ open: false, mode: "nueva", empresaIdx: 0 });
-    showToastFn("Condición guardada. Agente notificado por el sistema.");
-  };
-
-  const cardStyle: React.CSSProperties = {
-    background: "#fff", border: `0.5px solid ${AC.border}`, borderRadius: 14, overflow: "hidden", marginBottom: 16,
+  const handleSave = (data: Omit<Condicion, "id" | "icon">) => {
+    if (modal.mode === "nueva") {
+      setCondiciones([...condiciones, { id: Date.now(), icon: "rule", ...data }]);
+    } else if (modal.condicion) {
+      setCondiciones(condiciones.map((c) => c.id === modal.condicion!.id ? { ...c, ...data } : c));
+    }
+    setModal({ open: false, mode: "nueva" });
+    showToastFn("Regla actualizada. El agente IA ha sido re-entrenado.");
   };
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500, color: AC.dark }}>Condiciones exclusivas por empresa socia</div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>Solo el Socio Mayoritario puede modificar estas condiciones. El cambio es auditado y notificado al agente responsable.</div>
+          <div style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: AC.dark }}>Políticas Generales de Crédito</div>
+          <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+            Estas reglas aplican a <b>todas</b> las nuevas solicitudes. El agente IA utiliza estas instrucciones para pre-evaluar y generar resúmenes automáticos.
+          </div>
         </div>
         <button
-          onClick={() => setModal({ open: true, mode: "nueva", empresaIdx: 0 })}
-          style={{ padding: "9px 18px", background: AC.dark, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+          onClick={() => setModal({ open: true, mode: "nueva" })}
+          style={{ padding: "9px 18px", background: AC.dark, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", gap: 6 }}
         >
           <Icon name="add" size={16} color="#fff" />
-          Nueva condición
+          Añadir regla global
         </button>
       </div>
 
-      <div style={{ background: "#fffbec", border: "1px solid #f0d060", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#7a5500", display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 20 }}>
-        <Icon name="warning" size={16} color="#7a5500" style={{ marginTop: 1 }} />
-        <span>Toda modificación a estas condiciones genera una alerta al agente asignado de la empresa y queda registrada en el historial de auditoría del sistema.</span>
-      </div>
-
-      {condiciones.map((ec, ei) => (
-        <div key={ei} style={cardStyle}>
-          <div style={{ padding: "16px 20px", borderBottom: `0.5px solid ${AC.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 13.5, fontWeight: 600, color: AC.dark }}>{ec.empresa}</span>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#eaf5ee", color: "#1a7a40", border: "1px solid #8ed4a8" }}>Activa</span>
-          </div>
-
-          {ec.condiciones.map((cond, ci) => (
-            <div
-              key={cond.id}
-              style={{ padding: "14px 20px", borderBottom: ci < ec.condiciones.length - 1 ? `0.5px solid ${AC.border}` : "none", display: "flex", alignItems: "center", gap: 14 }}
-            >
-              <Icon name={cond.icon} size={22} color={AC.mid} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>{cond.nombre}</div>
-                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{cond.descripcion}</div>
+      <div style={{ background: "#fff", border: `0.5px solid ${AC.border}`, borderRadius: 14, overflow: "hidden" }}>
+        {condiciones.map((cond, ci) => (
+          <div key={cond.id} style={{ padding: "20px", borderBottom: ci < condiciones.length - 1 ? `0.5px solid ${AC.border}` : "none" }}>
+            
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+              <div style={{ background: AC.light, padding: 10, borderRadius: 10, color: AC.dark }}>
+                <Icon name={cond.icon} size={24} />
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: AC.dark, flexShrink: 0 }}>{cond.valor}</div>
+              
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{cond.nombre}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: AC.dark }}>{cond.valor}</div>
+                </div>
+                
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>{cond.descripcion}</div>
+                
+                {/* Visualización del Prompt para la IA */}
+                <div style={{ background: "#1e293b", borderRadius: 8, padding: "12px 16px", display: "flex", gap: 12 }}>
+                  <Icon name="smart_toy" size={20} color="#38bdf8" style={{ marginTop: 2 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 4 }}>
+                      Instrucción activa para Agente IA
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "#e2e8f0", fontFamily: "monospace", lineHeight: 1.5 }}>
+                      "{cond.instruccionIA}"
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    {cond.esEstricta ? (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(239,68,68,0.2)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.4)" }}>REGLA ESTRICTA</span>
+                    ) : (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(250,204,21,0.2)", color: "#fde047", border: "1px solid rgba(250,204,21,0.4)" }}>FLEXIBLE</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <button
-                onClick={() => setModal({ open: true, mode: "editar", empresaIdx: ei, condId: cond.id, nombre: cond.nombre, valor: cond.valor })}
-                style={{ background: "transparent", border: `0.5px solid ${AC.borderMid}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, color: AC.dark, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: 12 }}
+                onClick={() => setModal({ open: true, mode: "editar", condicion: cond })}
+                style={{ background: "transparent", border: `1px solid ${AC.borderMid}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, color: AC.dark, cursor: "pointer", display: "flex", gap: 6, flexShrink: 0 }}
               >
-                <Icon name="edit" size={14} color={AC.dark} />
+                <Icon name="edit" size={16} color={AC.dark} />
                 Editar
               </button>
             </div>
-          ))}
-        </div>
-      ))}
+          </div>
+        ))}
+      </div>
 
-      <CondicionModal
-        open={modal.open}
-        mode={modal.mode}
-        initialNombre={modal.nombre}
-        initialValor={modal.valor}
-        onClose={() => setModal({ open: false, mode: "nueva", empresaIdx: 0 })}
-        onSave={handleSave}
-      />
-
+      {modal.open && (
+        <CondicionModal open={modal.open} mode={modal.mode} condicion={modal.condicion} onClose={() => setModal({ open: false, mode: "nueva" })} onSave={handleSave} />
+      )}
       <Toast message={toastMsg} show={showToast} />
     </>
   );
