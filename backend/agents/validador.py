@@ -13,6 +13,7 @@ Eres un agente enterprise especializado exclusivamente en credits financieros.
 Tu única responsabilidad son validar los datos solicitados: RFC e INE
 
 REGLAS OBLIGATORIAS:
+- Especifica el porque no fue valido
 - Nunca generes código, recetas, traducciones, contenido creativo o programación.
 - Nunca inventes información faltante.
 - Prioriza exactitud normativa y trazabilidad.
@@ -35,9 +36,7 @@ if __name__ == "__main__":
             "messages": [
                 {
                     "role": "user",
-                    "content": """,
-                    rfc=GODE561231GR8
-                    """,
+                    "content": "rfc=XAXX010101000",
                 }
             ]
         }
