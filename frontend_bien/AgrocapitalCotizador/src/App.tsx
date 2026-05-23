@@ -26,8 +26,6 @@ interface WizardData {
   burocredito?: string;
   pld?: string;
   garantias?: string[];
-  montoSolicitado?: string;
-  plazo?: string;
   nombre?: string;
   correo?: string;
   telefono?: string;
@@ -335,9 +333,6 @@ PERFIL DEL SOLICITANTE:
 - Buró de crédito: ${data.burocredito ?? "N/A"}
 - Cumplimiento PLD: ${data.pld ?? "N/A"}
 - Garantías ofrecidas: ${(data.garantias ?? []).join(", ") || "N/A"}
-- Monto solicitado: ${data.montoSolicitado ?? "N/A"}
-- Plazo deseado: ${data.plazo ?? "N/A"}
-
 Emite tu dictamen con:
 1. Calificación general: VIABLE / VIABLE CON CONDICIONES / NO VIABLE
 2. Fortalezas del perfil (2-3 puntos)
@@ -559,8 +554,6 @@ const ResultadoFinal = ({ data, analisis }: { data: WizardData; analisis: string
             { label: "Actividad", value: data.subsector },
             { label: "Tipo empresa", value: data.tipoEmpresa },
             { label: "Antigüedad", value: data.antiguedad },
-            { label: "Monto deseado", value: data.montoSolicitado },
-            { label: "Plazo", value: data.plazo },
             { label: "Garantías", value: (data.garantias ?? []).join(", ") },
             { label: "Contacto", value: data.correo ?? data.telefono },
           ]
@@ -970,21 +963,6 @@ const StepFinanciero = ({
     ],
   };
 
-  const montos = [
-    { id: "hasta500k", label: "Hasta $500,000 MXN" },
-    { id: "500k_2m", label: "$500,001 – $2,000,000 MXN" },
-    { id: "2m_5m", label: "$2,000,001 – $5,000,000 MXN" },
-    { id: "mas5m", label: "Más de $5,000,000 MXN" },
-  ];
-
-  const plazos = [
-    { id: "6m", label: "6 meses" },
-    { id: "12m", label: "12 meses" },
-    { id: "24m", label: "24 meses" },
-    { id: "36m", label: "36 meses" },
-    { id: "mas36m", label: "Más de 36 meses" },
-  ];
-
   const SeccionLabel = ({ label }: { label: string }) => (
     <div style={{ fontSize: 12, fontWeight: 700, color: COLORES.verde, textTransform: "uppercase", letterSpacing: "0.07em", margin: "18px 0 10px" }}>
       {label}
@@ -992,7 +970,11 @@ const StepFinanciero = ({
   );
 
   const canContinue =
-    data.capitalSocial && data.carteraVencida && data.rentabilidad && data.burocredito && data.pld && data.montoSolicitado && data.plazo;
+    data.capitalSocial &&
+    data.carteraVencida &&
+    data.rentabilidad &&
+    data.burocredito &&
+    data.pld;
 
   return (
     <div>
@@ -1038,18 +1020,22 @@ const StepFinanciero = ({
         ))}
       </div>
 
-      <SeccionLabel label="Monto de financiamiento deseado" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {montos.map((m) => (
-          <OptionCard key={m.id} label={m.label} icon="payments" selected={data.montoSolicitado === m.id} onClick={() => onChange({ montoSolicitado: m.id })} />
-        ))}
-      </div>
-
-      <SeccionLabel label="Plazo deseado" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 24 }}>
-        {plazos.map((p) => (
-          <OptionCard key={p.id} label={p.label} icon="calendar_month" selected={data.plazo === p.id} onClick={() => onChange({ plazo: p.id })} />
-        ))}
+      <div
+        style={{
+          background: COLORES.verdeXL,
+          border: `1px solid ${COLORES.borde}`,
+          borderRadius: 10,
+          padding: "12px 14px",
+          fontSize: 12,
+          color: COLORES.textoS,
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          margin: "20px 0 24px",
+        }}
+      >
+        <Icon name="calculate" size={17} color={COLORES.verde} style={{ marginTop: 1 }} />
+        El monto, plazo y estimación de pagos se consultan por separado en el simulador público de préstamo.
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
@@ -1460,9 +1446,408 @@ const Wizard = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
+
+// ─── Simulador Público de Préstamo ───────────────────────────────────────────
+
+type FrecuenciaPago = "mensual" | "bimestral" | "trimestral" | "semestral";
+
+const PRODUCTOS_SIMULADOR = [
+  {
+    id: "avio",
+    nombre: "Habilitación o Avío",
+    margen: 4.25,
+    destino: "Insumos, jornales y ciclo productivo.",
+    garantia: "Cosecha, inventario o garantía acordada.",
+  },
+  {
+    id: "refaccionario",
+    nombre: "Crédito Refaccionario",
+    margen: 4.75,
+    destino: "Maquinaria, equipo e infraestructura.",
+    garantia: "Bien adquirido o garantía complementaria.",
+  },
+  {
+    id: "capital",
+    nombre: "Capital de Trabajo",
+    margen: 5.25,
+    destino: "Operación, comercialización y liquidez.",
+    garantia: "Sujeta al análisis crediticio.",
+  },
+  {
+    id: "rural",
+    nombre: "Financiamiento Rural",
+    margen: 4.9,
+    destino: "Productores, ejidos y actividades rurales.",
+    garantia: "Sujeta a elegibilidad y proyecto.",
+  },
+] as const;
+
+const FRECUENCIAS: Record<
+  FrecuenciaPago,
+  { label: string; meses: number; pagosAnio: number }
+> = {
+  mensual: { label: "Mensual", meses: 1, pagosAnio: 12 },
+  bimestral: { label: "Bimestral", meses: 2, pagosAnio: 6 },
+  trimestral: { label: "Trimestral", meses: 3, pagosAnio: 4 },
+  semestral: { label: "Semestral", meses: 6, pagosAnio: 2 },
+};
+
+const PLAZOS_SIMULADOR = [6, 12, 18, 24, 36, 48, 60];
+
+const money = (valor: number) =>
+  valor.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  });
+
+const SimuladorPrestamo = ({ onClose }: { onClose: () => void }) => {
+  const [monto, setMonto] = useState(500000);
+  const [plazoMeses, setPlazoMeses] = useState(24);
+  const [frecuencia, setFrecuencia] = useState<FrecuenciaPago>("mensual");
+  const [productoId, setProductoId] = useState<(typeof PRODUCTOS_SIMULADOR)[number]["id"]>("avio");
+  const [tiie, setTiie] = useState(8.5);
+
+  const producto = PRODUCTOS_SIMULADOR.find((p) => p.id === productoId) ?? PRODUCTOS_SIMULADOR[0];
+  const periodo = FRECUENCIAS[frecuencia];
+  const tasaAnual = tiie + producto.margen;
+  const numeroPagos = Math.max(1, Math.round(plazoMeses / periodo.meses));
+  const tasaPeriodo = Math.pow(1 + tasaAnual / 100, periodo.meses / 12) - 1;
+  const pagoEstimado =
+    tasaPeriodo === 0
+      ? monto / numeroPagos
+      : (monto * tasaPeriodo) / (1 - Math.pow(1 + tasaPeriodo, -numeroPagos));
+  const totalEstimado = pagoEstimado * numeroPagos;
+  const interesesEstimados = totalEstimado - monto;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,30,15,0.62)",
+        zIndex: 1050,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "18px",
+        backdropFilter: "blur(5px)",
+      }}
+      onClick={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div
+        style={{
+          width: "min(1080px, 100%)",
+          maxHeight: "94vh",
+          overflowY: "auto",
+          borderRadius: 22,
+          background: "#fff",
+          boxShadow: "0 28px 90px rgba(0,30,15,0.3)",
+        }}
+      >
+        <div
+          style={{
+            padding: "20px 26px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 20,
+            borderBottom: `1px solid ${COLORES.borde}`,
+            position: "sticky",
+            top: 0,
+            zIndex: 2,
+            background: "#fff",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 43,
+                height: 43,
+                borderRadius: 12,
+                background: COLORES.verdeL,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon name="calculate" size={25} color={COLORES.verde} />
+            </div>
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  color: COLORES.verde,
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: 23,
+                }}
+              >
+                Simulador de préstamo
+              </h2>
+              <p style={{ margin: "3px 0 0", color: COLORES.textoT, fontSize: 12 }}>
+                Financiamiento con fondeo tipo fideicomiso · Resultado informativo
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: 38,
+              height: 38,
+              border: "none",
+              borderRadius: 10,
+              background: COLORES.grisF,
+              cursor: "pointer",
+            }}
+          >
+            <Icon name="close" size={20} color={COLORES.textoS} />
+          </button>
+        </div>
+
+        <div
+          style={{
+            padding: 26,
+            display: "grid",
+            gridTemplateColumns: "minmax(310px, 1fr) minmax(300px, 0.9fr)",
+            gap: 26,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORES.verde, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 11 }}>
+              Producto a simular
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 22 }}>
+              {PRODUCTOS_SIMULADOR.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setProductoId(item.id)}
+                  style={{
+                    minHeight: 72,
+                    border: `1.5px solid ${productoId === item.id ? COLORES.verde : COLORES.borde}`,
+                    background: productoId === item.id ? COLORES.verdeL : "#fff",
+                    color: productoId === item.id ? COLORES.verde : COLORES.texto,
+                    borderRadius: 11,
+                    padding: "11px 12px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {item.nombre}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 12, marginBottom: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: COLORES.verde, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Monto deseado
+              </label>
+              <strong style={{ fontSize: 23, color: COLORES.verde }}>{money(monto)}</strong>
+            </div>
+            <input
+              type="range"
+              min={50000}
+              max={10000000}
+              step={50000}
+              value={monto}
+              onChange={(event) => setMonto(Number(event.target.value))}
+              style={{ width: "100%", accentColor: COLORES.verde, marginBottom: 6 }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", color: COLORES.textoT, fontSize: 12, marginBottom: 24 }}>
+              <span>$50,000</span>
+              <span>$10,000,000</span>
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORES.verde, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
+              Plazo seleccionado
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 22 }}>
+              {PLAZOS_SIMULADOR.map((plazo) => (
+                <button
+                  key={plazo}
+                  type="button"
+                  onClick={() => setPlazoMeses(plazo)}
+                  style={{
+                    padding: "10px 14px",
+                    border: `1.5px solid ${plazoMeses === plazo ? COLORES.verde : COLORES.borde}`,
+                    background: plazoMeses === plazo ? COLORES.verde : "#fff",
+                    color: plazoMeses === plazo ? "#fff" : COLORES.textoS,
+                    borderRadius: 9,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 600,
+                  }}
+                >
+                  {plazo} meses
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORES.verde, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
+              Frecuencia de pago
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 22 }}>
+              {(Object.entries(FRECUENCIAS) as [FrecuenciaPago, { label: string; meses: number; pagosAnio: number }][]).map(
+                ([key, item]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFrecuencia(key)}
+                    style={{
+                      padding: "10px 13px",
+                      border: `1.5px solid ${frecuencia === key ? COLORES.verde : COLORES.borde}`,
+                      background: frecuencia === key ? COLORES.verdeL : "#fff",
+                      color: frecuencia === key ? COLORES.verde : COLORES.textoS,
+                      borderRadius: 9,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                )
+              )}
+            </div>
+
+            <div
+              style={{
+                border: `1px solid ${COLORES.borde}`,
+                background: COLORES.verdeXL,
+                borderRadius: 12,
+                padding: 15,
+              }}
+            >
+              <label style={{ display: "block", color: COLORES.verde, fontWeight: 700, fontSize: 12, marginBottom: 7 }}>
+                TIIE REFERENCIAL ANUAL (EDITABLE PARA LA DEMO)
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="number"
+                  value={tiie}
+                  min={0}
+                  step={0.01}
+                  onChange={(event) => setTiie(Number(event.target.value) || 0)}
+                  style={{
+                    width: 110,
+                    border: `1px solid ${COLORES.bordeM}`,
+                    borderRadius: 8,
+                    padding: "9px 10px",
+                    fontFamily: "inherit",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: COLORES.verde,
+                  }}
+                />
+                <span style={{ color: COLORES.verde, fontWeight: 700 }}>%</span>
+                <span style={{ fontSize: 11, color: COLORES.textoT }}>
+                  Captura la tasa vigente aplicable.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: COLORES.verdeXL,
+              borderRadius: 17,
+              border: `1px solid ${COLORES.borde}`,
+              padding: 22,
+            }}
+          >
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, color: COLORES.verde, marginBottom: 10 }}>
+              Resultado estimado
+            </div>
+
+            <div
+              style={{
+                background: COLORES.verde,
+                color: "#fff",
+                padding: "18px",
+                borderRadius: 13,
+                marginBottom: 18,
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Pago {periodo.label.toLowerCase()} estimado</div>
+              <div style={{ fontSize: 36, lineHeight: 1.15, fontWeight: 700, marginTop: 5 }}>
+                {money(pagoEstimado)}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.82, marginTop: 7 }}>
+                {numeroPagos} pagos durante {plazoMeses} meses
+              </div>
+            </div>
+
+            {[
+              { label: "Monto solicitado", value: money(monto) },
+              { label: "TIIE referencial anual", value: `${tiie.toFixed(2)}%` },
+              { label: `Margen indicativo (${producto.nombre})`, value: `+ ${producto.margen.toFixed(2)}%` },
+              { label: "Tasa anual estimada", value: `${tasaAnual.toFixed(2)}%` },
+              { label: "Frecuencia de pagos", value: periodo.label },
+              { label: "Intereses estimados", value: money(interesesEstimados) },
+              { label: "Total estimado a pagar", value: money(totalEstimado) },
+            ].map((row) => (
+              <div
+                key={row.label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "9px 0",
+                  borderBottom: `1px solid ${COLORES.borde}`,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: COLORES.textoS }}>{row.label}</span>
+                <strong style={{ color: COLORES.texto }}>{row.value}</strong>
+              </div>
+            ))}
+
+            <div style={{ marginTop: 18, padding: "14px", borderRadius: 10, background: "#fff", border: `1px solid ${COLORES.borde}` }}>
+              <div style={{ color: COLORES.verde, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                Condiciones de referencia
+              </div>
+              <div style={{ color: COLORES.textoS, fontSize: 12, lineHeight: 1.65 }}>
+                <strong>Destino:</strong> {producto.destino}<br />
+                <strong>Fuente:</strong> Financiamiento con fondeo tipo fideicomiso/FIRA, sujeto a elegibilidad.<br />
+                <strong>Tasa:</strong> Variable, calculada como TIIE referencial más margen indicativo.<br />
+                <strong>Garantía:</strong> {producto.garantia}
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                display: "flex",
+                gap: 7,
+                alignItems: "flex-start",
+                color: "#7a5500",
+                background: COLORES.doradoL,
+                border: "1px solid rgba(200,168,75,0.3)",
+                borderRadius: 9,
+                padding: 11,
+                fontSize: 11,
+                lineHeight: 1.55,
+              }}
+            >
+              <Icon name="info" size={15} color={COLORES.dorado} style={{ marginTop: 1 }} />
+              Simulación informativa. No constituye aprobación, oferta vinculante ni CAT final.
+              La tasa, comisiones, garantías y condiciones dependen del análisis del expediente.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Landing Page Sections ────────────────────────────────────────────────────
 
-const Navbar = ({ onWizard }: { onWizard: () => void }) => {
+const Navbar = ({ onWizard, onSimulador }: { onWizard: () => void; onSimulador: () => void }) => {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -1535,6 +1920,28 @@ const Navbar = ({ onWizard }: { onWizard: () => void }) => {
             {item}
           </a>
         ))}
+        <button
+          onClick={onSimulador}
+          style={{
+            padding: "9px 18px",
+            background: scrolled ? "#fff" : "rgba(255,255,255,0.08)",
+            color: scrolled ? COLORES.verde : "#fff",
+            border: `1.5px solid ${scrolled ? COLORES.bordeM : "rgba(255,255,255,0.45)"}`,
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginLeft: 8,
+            transition: "all 0.18s",
+          }}
+        >
+          <Icon name="calculate" size={16} color={scrolled ? COLORES.verde : "#fff"} />
+          Simular préstamo
+        </button>
         <button
           onClick={onWizard}
           style={{
@@ -1684,7 +2091,7 @@ const Hero = ({ onWizard }: { onWizard: () => void }) => (
         {[
           { v: "+15", l: "años en el mercado" },
           { v: "$3B+", l: "MXN financiados" },
-          { v: "27+", l: "estados atendidos" },
+          { v: "8+", l: "estados atendidos" },
         ].map((stat) => (
           <div key={stat.l} style={{ textAlign: "center" }}>
             <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 30, fontWeight: 600, color: "#fff" }}>{stat.v}</div>
@@ -1975,6 +2382,17 @@ const Footer = () => (
 
 function Landing() {
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [simuladorOpen, setSimuladorOpen] = useState(false);
+
+  const abrirWizard = () => {
+    setSimuladorOpen(false);
+    setWizardOpen(true);
+  };
+
+  const abrirSimulador = () => {
+    setWizardOpen(false);
+    setSimuladorOpen(true);
+  };
 
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif", color: COLORES.texto, overflowX: "hidden" }}>
@@ -1987,17 +2405,18 @@ function Landing() {
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
       `}</style>
 
-      <Navbar onWizard={() => setWizardOpen(true)} />
-      <Hero onWizard={() => setWizardOpen(true)} />
-      <Productos onWizard={() => setWizardOpen(true)} />
+      <Navbar onWizard={abrirWizard} onSimulador={abrirSimulador} />
+      <Hero onWizard={abrirWizard} />
+      <Productos onWizard={abrirWizard} />
       <Diferenciadores />
       <Asterra />
-      <CTA onWizard={() => setWizardOpen(true)} />
+      <CTA onWizard={abrirWizard} />
       <Footer />
 
-      {!wizardOpen && <AsistenteFAQ />}
+      {!wizardOpen && !simuladorOpen && <AsistenteFAQ />}
 
       {wizardOpen && <Wizard onClose={() => setWizardOpen(false)} />}
+      {simuladorOpen && <SimuladorPrestamo onClose={() => setSimuladorOpen(false)} />}
     </div>
   );
 }
